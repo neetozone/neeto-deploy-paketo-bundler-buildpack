@@ -15,7 +15,6 @@ source "${ROOT_DIR}/scripts/.util/print.sh"
 
 function main {
   local version output token
-  local -a targets=()
   token=""
 
   while [[ "${#}" != 0 ]]; do
@@ -32,11 +31,6 @@ function main {
 
       --token|-t)
         token="${2}"
-        shift 2
-        ;;
-
-      --target)
-        targets+=("${2}")
         shift 2
         ;;
 
@@ -75,10 +69,58 @@ function main {
     buildpack_type=extension
   fi
 
-  buildpack::archive "${version}" "${buildpack_type}"
+  # Read targets from buildpack.toml
+  local -a targets=()
+  local buildpack_toml="${ROOT_DIR}/buildpack.toml"
+  if [[ -f "${buildpack_toml}" ]]; then
+    util::print::info "Reading targets from ${buildpack_toml}..."
+    local targets_json
+    targets_json=$(cat "${buildpack_toml}" | yj -tj | jq -r '.targets[]? | "\(.os)/\(.arch)"' 2>/dev/null || echo "")
+    
+    if [[ -n "${targets_json}" ]]; then
+      while IFS= read -r target; do
+        if [[ -n "${target}" ]]; then
+          targets+=("${target}")
+        fi
+      done <<< "${targets_json}"
+      util::print::info "Found ${#targets[@]} target(s) in buildpack.toml: ${targets[*]}"
+    fi
+  fi
+
   if [[ ${#targets[@]} -gt 0 ]]; then
-    buildpackage::create "${output}" "${buildpack_type}" "${targets[@]}"
+    # Build and package for each target architecture separately
+    local arch_outputs=()
+    for target in "${targets[@]}"; do
+      local arch
+      arch=$(echo "${target}" | cut -d'/' -f2)
+      util::print::title "Building binaries for ${target} (arch: ${arch})..."
+      
+      # Clean bin directory before building for this architecture
+      rm -rf "${ROOT_DIR}/bin"
+      mkdir -p "${ROOT_DIR}/bin"
+      
+      # Build archive for this architecture (GOARCH will be used by jam pack's pre-package script)
+      export GOARCH="${arch}"
+      buildpack::archive "${version}" "${buildpack_type}" "${target}"
+      unset GOARCH
+      
+      # Package with this target
+      local arch_output="${output%.cnb}-${arch}.cnb"
+      arch_outputs+=("${arch_output}")
+      buildpackage::create "${arch_output}" "${buildpack_type}" "${target}"
+    done
+    
+    # Create a combined output by copying the first one (for compatibility)
+    if [[ ${#arch_outputs[@]} -gt 0 ]]; then
+      cp "${arch_outputs[0]}" "${output}"
+      util::print::title "Created architecture-specific packages:"
+      for arch_output in "${arch_outputs[@]}"; do
+        echo "  - ${arch_output}"
+      done
+      echo "  - ${output} (copy of ${arch_outputs[0]})"
+    fi
   else
+    buildpack::archive "${version}" "${buildpack_type}"
     buildpackage::create "${output}" "${buildpack_type}"
   fi
 }
@@ -89,12 +131,13 @@ package.sh --version <version> [OPTIONS]
 
 Packages a buildpack or an extension into a buildpackage .cnb file.
 
+Targets are automatically read from buildpack.toml [[targets]] sections.
+
 OPTIONS
   --help               -h            prints the command usage
   --version <version>  -v <version>  specifies the version number to use when packaging a buildpack or an extension
   --output <output>    -o <output>   location to output the packaged buildpackage or extension artifact (default: ${ROOT_DIR}/build/buildpackage.cnb)
   --token <token>                    Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
-  --target <target>                  Target platform (e.g. linux/amd64). Can be specified multiple times for multi-arch (optional)
 USAGE
 }
 
@@ -117,6 +160,10 @@ function tools::install() {
     --directory "${BIN_DIR}" \
     --token "${token}"
 
+  util::tools::yj::install \
+    --directory "${BIN_DIR}" \
+    --token "${token}"
+
   if [[ -f "${ROOT_DIR}/.libbuildpack" ]]; then
     util::tools::packager::install \
       --directory "${BIN_DIR}"
@@ -131,8 +178,16 @@ function buildpack::archive() {
   local version
   version="${1}"
   buildpack_type="${2}"
+  local target="${3:-}"
 
-  util::print::title "Packaging ${buildpack_type} into ${BUILD_DIR}/buildpack.tgz..."
+  local archive_name="buildpack.tgz"
+  if [[ -n "${target}" ]]; then
+    local arch
+    arch=$(echo "${target}" | cut -d'/' -f2)
+    archive_name="buildpack-${arch}.tgz"
+  fi
+
+  util::print::title "Packaging ${buildpack_type} into ${BUILD_DIR}/${archive_name}..."
 
   if [[ -f "${ROOT_DIR}/.libbuildpack" ]]; then
     packager \
@@ -144,7 +199,7 @@ function buildpack::archive() {
     jam pack \
       "--${buildpack_type}" "${ROOT_DIR}/${buildpack_type}.toml"\
       --version "${version}" \
-      --output "${BUILD_DIR}/buildpack.tgz"
+      --output "${BUILD_DIR}/${archive_name}"
   fi
 }
 
@@ -153,18 +208,29 @@ function buildpackage::create() {
   output="${1}"
   buildpack_type="${2}"
   shift 2
-  local targets=("${@}")
+  local targets=("${@:-}")
 
   util::print::title "Packaging ${buildpack_type}... ${output}"
+
+  # Determine archive path based on target
+  local archive_path="${BUILD_DIR}/buildpack.tgz"
+  if [[ ${#targets[@]} -eq 1 ]]; then
+    local arch
+    arch=$(echo "${targets[0]}" | cut -d'/' -f2)
+    archive_path="${BUILD_DIR}/buildpack-${arch}.tgz"
+    if [[ ! -f "${archive_path}" ]]; then
+      archive_path="${BUILD_DIR}/buildpack.tgz"
+    fi
+  fi
 
   if [ "$buildpack_type" == "extension" ]; then
     cwd=$(pwd)
     cd ${BUILD_DIR}
-    mkdir cnbdir
+    mkdir -p cnbdir
     cd cnbdir
-    cp ../buildpack.tgz .
-    tar -xvf buildpack.tgz
-    rm buildpack.tgz
+    cp "${archive_path}" .
+    tar -xvf buildpack*.tgz
+    rm buildpack*.tgz
 
     pack_args=(
       extension package "${output}"
@@ -183,7 +249,7 @@ function buildpackage::create() {
   else
     pack_args=(
       buildpack package "${output}"
-      --path "${BUILD_DIR}/buildpack.tgz"
+      --path "${archive_path}"
       --format file
     )
     

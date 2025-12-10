@@ -43,12 +43,13 @@ USAGE
 }
 
 function run::build() {
+  local target_arch="${GOARCH:-amd64}"
   if [[ -f "${BUILDPACKDIR}/run/main.go" ]]; then
     pushd "${BUILDPACKDIR}/bin" > /dev/null || return
-      printf "%s" "Building run... "
+      printf "%s" "Building run for ${target_arch}... "
 
       GOOS=linux \
-      GOARCH=amd64 \
+      GOARCH="${GOARCH:-amd64}" \
       CGO_ENABLED=0 \
         go build \
           -ldflags="-s -w" \
@@ -77,16 +78,17 @@ function run::build() {
 }
 
 function cmd::build() {
+  local target_arch="${GOARCH:-amd64}"
   if [[ -d "${BUILDPACKDIR}/cmd" ]]; then
     local name
     for src in "${BUILDPACKDIR}"/cmd/*; do
       name="$(basename "${src}")"
 
       if [[ -f "${src}/main.go" ]]; then
-        printf "%s" "Building ${name}... "
+        printf "%s" "Building ${name} for ${target_arch}... "
 
         GOOS="linux" \
-        GOARCH="amd64" \
+        GOARCH="${GOARCH:-amd64}" \
         CGO_ENABLED=0 \
           go build \
             -ldflags="-s -w" \
