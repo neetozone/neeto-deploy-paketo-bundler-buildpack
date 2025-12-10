@@ -41,14 +41,30 @@ file that looks like the following:
     # Optional, default false.
     launch = true
 ```
-## Usage
+## Packaging
 
 To package this buildpack for consumption:
+
+```bash
+./scripts/package.sh --version 0.8.48
 ```
-$ ./scripts/package.sh
+
+This will build the buildpack for all target architectures specified in `buildpack.toml` (amd64 and arm64 by default) and create architecture-specific archives in the `build/` directory.
+
+## Publishing
+
+To publish this buildpack to a registry:
+
+```bash
+./scripts/publish.sh \
+  --image-ref 348674388966.dkr.ecr.us-east-1.amazonaws.com/neeto-deploy/paketo/buildpack/bundler:0.8.48
 ```
-This builds the buildpack's Go source using GOOS=linux by default. You can
-supply another value as the first argument to package.sh.
+
+The script will automatically:
+- Read target architectures from `buildpack.toml`
+- Detect architecture-specific buildpack archives
+- Publish each architecture separately
+- Create and push a multi-arch manifest list
 
 ## Bundler Configurations
 
