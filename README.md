@@ -4,14 +4,14 @@
 
 The Bundler CNB provides the Bundler binary.
 
-The buildpack installs Bundler onto the `$PATH` and `$GEM_PATH` which makes it
-available for subsequent buildpacks and/or in the final running container.
+The buildpack installs Bundler onto the `$PATH` and `$GEM_PATH` which makes it available for subsequent buildpacks
+and/or in the final running container.
 
 ## Integration
 
-The Bundler CNB provides bundler as a dependency. Downstream buildpacks can
-require the bundler dependency by generating a [Build Plan
-TOML](https://github.com/buildpacks/spec/blob/master/buildpack.md#build-plan-toml)
+The Bundler CNB provides bundler as a dependency.
+Downstream buildpacks can require the bundler dependency by generating a
+[Build Plan TOML](https://github.com/buildpacks/spec/blob/master/buildpack.md#build-plan-toml)
 file that looks like the following:
 
 ```toml
@@ -49,9 +49,7 @@ To package this buildpack for consumption:
 ./scripts/package.sh --version 0.8.48
 ```
 
-This will build the buildpack for all target architectures specified in
-`buildpack.toml` (amd64 and arm64 by default) and create architecture-specific
-archives in the `build/` directory.
+This will build the buildpack for all target architectures specified in `buildpack.toml` (amd64 and arm64 by default) and create architecture-specific archives in the `build/` directory.
 
 ## Publishing
 
@@ -74,8 +72,8 @@ Specifying the `Bundler` version through `buildpack.yml` configuration will be
 deprecated in Bundler Buildpack v1.0.0.
 
 To migrate from using `buildpack.yml` please set the `$BP_BUNDLER_VERSION`
-environment variable at build time either directly (ex. `pack build my-app --env
-BP_BUNDLER_VERSION=2.7.*`) or through a [`project.toml`
+environment variable at build time either directly (ex. `pack build my-app
+--env BP_BUNDLER_VERSION=2.7.*`) or through a [`project.toml`
 file](https://github.com/buildpacks/spec/blob/main/extensions/project-descriptor.md)
 
 ```shell
@@ -106,5 +104,5 @@ $BP_LOG_LEVEL="DEBUG"
 ## Compatibility
 
 This buildpack is currently only supported on the Paketo Bionic and Jammy stack
-distributions. A pre-compiled distribution of Bundler is provided for the Paketo
-stacks (i.e. `io.buildpacks.stack.jammy` and `io.buildpacks.stacks.bionic`).
+distributions. A pre-compiled distribution of Bundler is provided for the Paketo stacks (i.e.
+`io.buildpacks.stack.jammy` and `io.buildpacks.stacks.bionic`).
